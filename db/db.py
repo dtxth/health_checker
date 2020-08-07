@@ -1,4 +1,7 @@
+import os
 from peewee import PostgresqlDatabase
+
+DATABASE = os.environ.get('DATABASE', '0.0.0.0')
 
 class DbController():
 	
@@ -19,5 +22,5 @@ class DbController():
 			self.db.create_tables(table_model)
 
 def init_db():
-	return DbController('hc', 'postgres', 'postgres', '0.0.0.0', 5432).db
+	return DbController('hc', 'postgres', 'postgres', DATABASE, 5432).db
 

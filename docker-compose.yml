@@ -12,14 +12,16 @@ services:
     ports:
        - 5432:5432      
   health_check:
+        environment:
+          - DATABASE=db
         restart: always
         build:
             context: .
             dockerfile: ./docker/healthcheck
-        volumes:
-            - ./testTaskConcurrency:/srv/www/testTaskConcurrency
         expose:
           - 8000
+        ports:
+          - 8000:8000      
         command: "./start.sh"
         depends_on:
             - db    
