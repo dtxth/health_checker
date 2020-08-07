@@ -1,0 +1,25 @@
+version: '3.7'
+
+services:
+  db:
+    image: postgres:12-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=hc
+    expose:
+       - 5432
+    ports:
+       - 5432:5432      
+  health_check:
+        restart: always
+        build:
+            context: .
+            dockerfile: ./docker/healthcheck
+        volumes:
+            - ./testTaskConcurrency:/srv/www/testTaskConcurrency
+        expose:
+          - 8000
+        command: "./start.sh"
+        depends_on:
+            - db    
