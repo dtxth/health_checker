@@ -18,10 +18,20 @@ services:
         build:
             context: .
             dockerfile: ./docker/healthcheck
+        command: "python3 start.py -as"
+        depends_on:
+            - db    
+  get_status:
+        environment:
+          - DATABASE=db
+        restart: always
+        build:
+            context: .
+            dockerfile: ./docker/healthcheck
         expose:
           - 8000
         ports:
           - 8000:8000      
-        command: "./start.sh"
+        command: "gunicorn -w 3 -b 0.0.0.0:8000 services.get_status:app"
         depends_on:
             - db    

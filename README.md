@@ -8,7 +8,7 @@ To start do:
 
 
 To start check use script start.py with keys:
->  -s sync start
+>  -s sync start 
 >  -m multthread semaphore start
 >  -as async semaphore start
 >  -apc async producer consumer start
