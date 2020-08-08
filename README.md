@@ -9,8 +9,11 @@ To start do:
 
 To start check use script start.py with keys:
 >  -s sync start 
+
 >  -m multthread semaphore start
->  -as async semaphore start
+
+>  -as async semaphore start 
+
 >  -apc async producer consumer start
 
 To get all checking states use next GET request:
