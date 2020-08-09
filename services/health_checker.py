@@ -2,6 +2,7 @@ import requests
 import threading
 import time
 import asyncio
+import aiohttp
 import datetime
 from db.models import HealthCheckModel
 from utils.errors import ParamError
@@ -103,16 +104,16 @@ class AsyncSemaphoreVersion(HealthCheck):
     print(f'total time: {total_time:.2f} seconds')
 
 
-  async def _ping_and_save(self,url, bs):
+  async def _ping_and_save(self,url, bs, session):
     started_at = time.monotonic()
+    status_code = 0
     await bs.acquire()
     try:
-      r = requests.get(url, timeout=self.timeout)
-      status_code = r.status_code
-      print(r.url, r.status_code)
-    except requests.exceptions.ConnectionError:
-      print(url, "Url doent exist")  
-      status_code = 0
+      async with session.get(url, timeout=self.timeout, ssl=False) as r:
+        status_code = r.status
+        print(r.url, r.status)
+    except Exception  as e:
+      print(url, e)  
     finally:
       duration = time.monotonic() - started_at
       print("function took" , duration)
@@ -120,11 +121,10 @@ class AsyncSemaphoreVersion(HealthCheck):
       bs.release()
 
   async def _main(self):
-    bs = asyncio.Semaphore(value=self.concurrency)
-    await asyncio.wait([self._ping_and_save(url, bs) for url in self.urls])
-    print("Main Coroutine")
-
-    
+    async with aiohttp.ClientSession() as session:
+      bs = asyncio.Semaphore(value=self.concurrency)
+      await asyncio.wait([self._ping_and_save(url, bs, session) for url in self.urls])
+      print("Main Coroutine")
 
 
 
@@ -134,43 +134,43 @@ class AsyncProducerConsumerVersion(HealthCheck):
     print("All Workers Completed")
 
   async def _main(self):
-    queue = asyncio.Queue()
+    async with aiohttp.ClientSession() as session:
+      queue = asyncio.Queue()
 
-    [ queue.put_nowait(url) for url in self.urls ]
+      [ queue.put_nowait(url) for url in self.urls ]
 
-    tasks = []
-    for i in range(self.concurrency):
-        task = asyncio.create_task(self._ping_and_save(queue))
-        tasks.append(task)
+      tasks = []
+      for i in range(self.concurrency):
+          task = asyncio.create_task(self._ping_and_save(queue,session))
+          tasks.append(task)
 
-    # Wait until the queue is fully processed.
-    started_at = time.monotonic()
-    await queue.join()
-    total_time = time.monotonic() - started_at
+      # Wait until the queue is fully processed.
+      started_at = time.monotonic()
+      await queue.join()
+      total_time = time.monotonic() - started_at
 
-    # Cancel our worker tasks.
-    for task in tasks:
-        task.cancel()
+      # Cancel our worker tasks.
+      for task in tasks:
+          task.cancel()
 
-    # Wait until all worker tasks are cancelled.
-    await asyncio.gather(*tasks, return_exceptions=True)
+      # Wait until all worker tasks are cancelled.
+      await asyncio.gather(*tasks, return_exceptions=True)
 
     print('====')
     print(f'total time: {total_time:.2f} seconds')
 
-  async def _ping_and_save(self, queue):
+  async def _ping_and_save(self, queue,session):
     while True:
       started_at = time.monotonic()
-
+      status_code = 0
       url = await queue.get()
 
       try:
-        r = requests.get(url, timeout=self.timeout)
-        status_code = r.status_code
-        print(r.url, r.status_code)
-      except requests.exceptions.ConnectionError:
-        print(url, "Url doent exist")  
-        status_code = 0
+        async with session.get(url, timeout=self.timeout, ssl=False) as r:
+          status_code = r.status
+          print(r.url, r.status)
+      except Exception as e:
+        print(url, e)  
       finally:
         duration = time.monotonic() - started_at
         print("function took" , duration)
