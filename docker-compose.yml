@@ -18,7 +18,7 @@ services:
         build:
             context: .
             dockerfile: ./docker/healthcheck
-        command: "python3 start.py -as"
+        command: "python3 start.py --type asynq --urls 'http://ya.ru' 'http://mail.ru' 'http://cb-ideas.com' 'http://cb-ideas.ru' 'http://cb-ideas.rut' 'http://google.com' 'http://vk.com'  --interval 2 --concurrency 3 --timeout 1"
         depends_on:
             - db    
   get_status:
