@@ -6,5 +6,4 @@ COPY ./ /srv/www/testTaskConcurrency
 WORKDIR /srv/www/testTaskConcurrency
 
 RUN pip3 install -r requirements.txt
-RUN 
 

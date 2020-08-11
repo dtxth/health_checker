@@ -29,10 +29,10 @@ def main(argv):
       print("--type sync Sync version start")
       print("--type mult Multthread semaphore version start")
       print("--type asyncsem Async semaphore version start")
-      print("---type asynq Async producer-consumer version start")
+      print("--type asynq Async producer-consumer version start")
       sys.exit(2)
 
-  CLI=argparse.ArgumentParser()      
+  CLI = argparse.ArgumentParser()      
 
   CLI.add_argument(
       "--type",  # name on the CLI - drop the `--` for positional/required parameters
@@ -51,6 +51,7 @@ def main(argv):
     type=int,
     default = 4
     ) 
+  
   CLI.add_argument(
     "--concurrency",  # name on the CLI - drop the `--` for positional/required parameters
     type=int,
