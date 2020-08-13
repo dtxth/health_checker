@@ -1,5 +1,6 @@
 import requests
 import threading
+import queue
 import time
 import asyncio
 import aiohttp
@@ -10,11 +11,11 @@ from utils.errors import ParamError
 
 class HealthCheck():
 
-  def __init__(self,**paramsStub):
-    self.urls = paramsStub.get("urls", None)
-    self.interval = paramsStub.get("interval", 1)
-    self.concurrency = paramsStub.get("concurrency", 1)
-    self.timeout = paramsStub.get("timeout", 1)
+  def __init__(self,**params):
+    self.urls = params.get("urls", None)
+    self.interval = params.get("interval", 1)
+    self.concurrency = params.get("concurrency", 1)
+    self.timeout = params.get("timeout", 1)
 
     if self.urls is None:
         raise ParamError
@@ -22,17 +23,13 @@ class HealthCheck():
     print("urls list ", len(self.urls), self.urls)
 
   def run(self):
-    self._start_health_check()
-
-    
-  def _start_health_check(self):
-      '''need to be implenmented in childs'''
-      pass
+    '''need to be implenmented in childs'''
+    pass
 
 
 class SyncVersion(HealthCheck):
 
-  def _start_health_check(self):
+  def run(self):
     while True:
       all_started_at = time.monotonic()
       for url in self.urls:
@@ -54,17 +51,16 @@ class SyncVersion(HealthCheck):
       time.sleep(self.interval)
 
 
-
 class SemaphoreMultithreadVersion(HealthCheck):
 
-  def _start_health_check(self):
+  def run(self):
     while True:
       urls_queue = self.urls[:]
       started_at = time.monotonic()
       bs = threading.BoundedSemaphore(self.concurrency)
       threads_amount = len(self.urls) if len(self.urls) < self.concurrency else self.concurrency 
 
-      threads = [threading.Thread(target=self._ping_and_save, args=(bs, urls_queue))
+      threads = [threading.Thread(target=self._check_health, args=(bs, urls_queue))
                            for _ in range(threads_amount)]
 
       [ t.start() for t in threads ]
@@ -76,7 +72,7 @@ class SemaphoreMultithreadVersion(HealthCheck):
       time.sleep(self.interval)
 
   
-  def _ping_and_save(self,bs, urls_queue):
+  def _check_health(self,bs, urls_queue):
       while urls_queue:
         url = urls_queue.pop()
         started_at = time.monotonic()
@@ -95,8 +91,49 @@ class SemaphoreMultithreadVersion(HealthCheck):
           bs.release()
 
 
+class ProducerConsumerMultithreadVersion(HealthCheck):
+
+  def run(self):
+    while True:
+      urls_queue = queue.Queue(len(self.urls))
+      [ urls_queue.put_nowait(url) for url in self.urls ]
+
+      started_at = time.monotonic()
+      threads_amount = len(self.urls) if len(self.urls) < self.concurrency else self.concurrency 
+
+      threads = [threading.Thread(target=self._check_health, args=(urls_queue,))
+                           for _ in range(threads_amount)]
+
+      [ t.start() for t in threads ]
+      urls_queue.join()
+      [ t.join() for t in threads ]
+
+      total_time = time.monotonic() - started_at
+      print('====')
+      print(f'total time: {total_time:.2f} seconds')
+      time.sleep(self.interval)
+
+  
+  def _check_health(self, urls_queue):
+      while not urls_queue.empty():
+        url = urls_queue.get()
+        started_at = time.monotonic()
+        try:
+          r = requests.get(url, timeout=self.timeout)
+          print(r.url, r.status_code)
+          status_code = r.status_code
+        except requests.exceptions.ConnectionError:
+          print(url, "Url doent exist")  
+          status_code = 0
+        finally:
+          duration = time.monotonic() - started_at
+          print("function took" , duration)
+          HealthCheckModel.create( url = url, duration = duration, response_code = status_code, date = datetime.datetime.now() )
+          urls_queue.task_done()
+
+
 class AsyncSemaphoreVersion(HealthCheck):
-  def _start_health_check(self):
+  def run(self):
     started_at = time.monotonic()
     asyncio.run(self._main())
     total_time = time.monotonic() - started_at
@@ -104,7 +141,7 @@ class AsyncSemaphoreVersion(HealthCheck):
     print(f'total time: {total_time:.2f} seconds')
 
 
-  async def _ping_and_save(self,url, bs, session):
+  async def _check_health(self,url, bs, session):
     started_at = time.monotonic()
     status_code = 0
     await bs.acquire()
@@ -125,14 +162,14 @@ class AsyncSemaphoreVersion(HealthCheck):
     async with aiohttp.ClientSession() as session:
       while True:
         bs = asyncio.Semaphore(value=self.concurrency)
-        await asyncio.wait([self._ping_and_save(url, bs, session) for url in self.urls])
+        await asyncio.wait([self._check_health(url, bs, session) for url in self.urls])
         print("Main Coroutine")
         await asyncio.sleep(self.interval)
         
 
 
 class AsyncProducerConsumerVersion(HealthCheck):
-  def _start_health_check(self):
+  def run(self):
     asyncio.run(self._main())
     print("All Workers Completed")
 
@@ -145,7 +182,7 @@ class AsyncProducerConsumerVersion(HealthCheck):
 
         tasks = []
         for i in range(self.concurrency):
-            task = asyncio.create_task(self._ping_and_save(queue, session))
+            task = asyncio.create_task(self._check_health(queue, session))
             tasks.append(task)
 
         # Wait until the queue is fully processed.
@@ -163,7 +200,7 @@ class AsyncProducerConsumerVersion(HealthCheck):
         print(f'total time: {total_time:.2f} seconds')
         await asyncio.sleep(self.interval)
 
-  async def _ping_and_save(self, queue,session):
+  async def _check_health(self, queue, session):
     while True:    
         started_at = time.monotonic()
         status_code = 0

@@ -1,7 +1,6 @@
 import sys, getopt
 from services.health_checker import SyncVersion, SemaphoreMultithreadVersion, \
-      AsyncSemaphoreVersion, AsyncProducerConsumerVersion
-
+      ProducerConsumerMultithreadVersion, AsyncSemaphoreVersion, AsyncProducerConsumerVersion
 
 paramsStub = { "urls" : ['http://ya.ru',
                          'http://mail.ru',
@@ -22,12 +21,13 @@ paramsStub = { "urls" : ['http://ya.ru',
 
 import argparse
 
-SCRIPT_CHOICES = ["sync", 'mult', 'asyncsem', 'asynq']
+SCRIPT_CHOICES = ["sync", 'mult', 'pc', 'asyncsem', 'asynq']
 
 def main(argv):
   if not argv:
       print("--type sync Sync version start")
       print("--type mult Multthread semaphore version start")
+      print("--type pc Multthread Producer Consumer version start")
       print("--type asyncsem Async semaphore version start")
       print("--type asynq Async producer-consumer version start")
       sys.exit(2)
@@ -71,13 +71,15 @@ def main(argv):
 
   print(params)
   if args.type == "sync":
-      SyncVersion(**params).run()
+    SyncVersion(**params).run()
   elif args.type == "mult":
-      SemaphoreMultithreadVersion(**params).run()           
+    SemaphoreMultithreadVersion(**params).run()           
+  elif args.type == "pc":
+    ProducerConsumerMultithreadVersion(**params).run()           
   elif args.type == "asyncsem":
-      AsyncSemaphoreVersion(**params).run()           
+    AsyncSemaphoreVersion(**params).run()           
   elif args.type == "asynq":
-      AsyncProducerConsumerVersion(**params).run()           
+    AsyncProducerConsumerVersion(**params).run()           
 
 if __name__ == "__main__":
    main(sys.argv[1:])
